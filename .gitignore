@@ -1,0 +1,4 @@
+# Build inputs — keep local, data is baked into index.html
+*.csv
+build-loadout.mjs
+loadout-data.js
