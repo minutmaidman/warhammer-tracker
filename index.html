@@ -355,6 +355,16 @@ h1,h2,h3,h4 { font-family: 'Cinzel', serif; letter-spacing: 0.05em; }
 .ability-desc-body b { color: var(--gold3); font-weight: 600; }
 .ability-desc-body span.kwb { color: var(--gold2); font-style: italic; }
 .ability-desc-body a { color: var(--accent2); text-decoration: none; }
+.lp-divider { border: none; border-top: 1px solid var(--border); margin: 0.75rem 0; }
+.loadout-notes {
+  width: 100%; min-height: 56px; resize: vertical;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); padding: 0.45rem 0.65rem; border-radius: 3px;
+  font-family: 'Crimson Pro', serif; font-size: 0.95rem; line-height: 1.5;
+  outline: none; transition: border-color 0.15s;
+}
+.loadout-notes:focus { border-color: var(--gold); }
+.loadout-notes::placeholder { color: var(--text3); }
 </style>
 </head>
 <body>
@@ -483,7 +493,7 @@ function AddUnitModal({ list, onAdd, onClose }) {
         qty: clamp(qty,1,99),
         msrpCAD: selected.msrpCAD,
         acquired: 0, built: 0, primed: 0, painted: 0,
-        selectedEnhancement: null
+        selectedEnhancement: null, loadoutNotes: ''
       });
       onClose();
     } else if (mode === 'manual') {
@@ -498,7 +508,7 @@ function AddUnitModal({ list, onAdd, onClose }) {
         qty: clamp(qty,1,99),
         msrpCAD: manual.msrp ? parseFloat(manual.msrp) : null,
         acquired:0, built:0, primed:0, painted:0,
-        selectedEnhancement: null
+        selectedEnhancement: null, loadoutNotes: ''
       });
       onClose();
     }
@@ -675,86 +685,91 @@ function MsrpModal({ entry, onSave, onClose }) {
 
 // ── Loadout Panel ─────────────────────────────────────────────────────────────
 function LoadoutPanel({ entry, gameSystem, listId, onUpdate }) {
+  const [det, setDet] = useState('');
+  const [openIdx, setOpenIdx] = useState(null);
   const ld = window.LOADOUT_DATA;
-  if (!ld) return null;
 
-  if (gameSystem === 'wh40k' && entry.role === 'Characters') {
-    const enhIds = ld.unitEnhancements?.[entry.unitId] || [];
-    if (!enhIds.length) return <div className="loadout-panel" style={{color:'var(--text3)',fontSize:'0.8rem'}}>No enhancement data for this unit.</div>;
+  const enhIds = (ld && gameSystem==='wh40k' && entry.role==='Characters' && entry.unitId!=null)
+    ? (ld.unitEnhancements?.[entry.unitId] || []) : [];
+  const abilities = (ld && gameSystem==='aos' && entry.unitId!=null)
+    ? (ld.unitAbilities?.[entry.unitId] || []) : [];
 
-    const allEnhs = enhIds.map(id => ld.enhancements[id] ? {id, ...ld.enhancements[id]} : null).filter(Boolean);
-    const detachments = [...new Set(allEnhs.map(e => e.detachment))].sort();
+  const allEnhs = enhIds.map(id=>ld.enhancements[id]?{id,...ld.enhancements[id]}:null).filter(Boolean);
+  const detachments = [...new Set(allEnhs.map(e=>e.detachment))].sort();
+  const activeDet = det || detachments[0] || '';
+  const filtered = allEnhs.filter(e=>e.detachment===activeDet);
 
-    const [det, setDet] = useState(detachments[0] || '');
-    const activeDet = det || detachments[0] || '';
-    const filtered = allEnhs.filter(e => e.detachment === activeDet);
+  return (
+    <div className="loadout-panel">
 
-    return (
-      <div className="loadout-panel">
-        <div className="lp-header">
-          <span className="lp-title">Enhancements</span>
-          <select className="det-select" value={activeDet} onChange={e=>setDet(e.target.value)}>
-            {detachments.map(d=><option key={d} value={d}>{d}</option>)}
-          </select>
-        </div>
-        <div className="enh-list">
-          <label className="enh-item">
-            <input type="radio" name={`enh-${entry.id}`}
-              checked={!entry.selectedEnhancement}
-              onChange={()=>onUpdate(listId, entry.id, {selectedEnhancement:null})}/>
-            <span className="enh-none">— None —</span>
-          </label>
-          {filtered.map(e=>(
-            <label key={e.id} className={`enh-item${entry.selectedEnhancement===e.id?' enh-selected':''}`}>
+      {/* 40K character enhancements */}
+      {allEnhs.length > 0 && (
+        <>
+          <div className="lp-header">
+            <span className="lp-title">Enhancements</span>
+            <select className="det-select" value={activeDet} onChange={e=>setDet(e.target.value)}>
+              {detachments.map(d=><option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+          <div className="enh-list">
+            <label className="enh-item">
               <input type="radio" name={`enh-${entry.id}`}
-                checked={entry.selectedEnhancement===e.id}
-                onChange={()=>onUpdate(listId, entry.id, {selectedEnhancement:e.id})}/>
-              <div className="enh-info">
-                <div className="enh-row">
-                  <span className="enh-name">{e.name}</span>
-                  {e.cost>0
-                    ? <span className="enh-cost">+{e.cost}pts</span>
-                    : <span className="enh-free">Free</span>}
+                checked={!entry.selectedEnhancement}
+                onChange={()=>onUpdate(listId, entry.id, {selectedEnhancement:null})}/>
+              <span className="enh-none">— None —</span>
+            </label>
+            {filtered.map(e=>(
+              <label key={e.id} className={`enh-item${entry.selectedEnhancement===e.id?' enh-selected':''}`}>
+                <input type="radio" name={`enh-${entry.id}`}
+                  checked={entry.selectedEnhancement===e.id}
+                  onChange={()=>onUpdate(listId, entry.id, {selectedEnhancement:e.id})}/>
+                <div className="enh-info">
+                  <div className="enh-row">
+                    <span className="enh-name">{e.name}</span>
+                    {e.cost>0 ? <span className="enh-cost">+{e.cost}pts</span> : <span className="enh-free">Free</span>}
+                  </div>
+                  {entry.selectedEnhancement===e.id && e.desc && (
+                    <div className="enh-desc" dangerouslySetInnerHTML={{__html:e.desc}}/>
+                  )}
                 </div>
-                {entry.selectedEnhancement===e.id && e.desc && (
-                  <div className="enh-desc" dangerouslySetInnerHTML={{__html:e.desc}}/>
+              </label>
+            ))}
+          </div>
+          <div className="lp-divider"/>
+        </>
+      )}
+
+      {/* AoS unit abilities */}
+      {abilities.length > 0 && (
+        <>
+          <div className="lp-header"><span className="lp-title">Unit Abilities</span></div>
+          <div className="ability-list">
+            {abilities.map((a,i)=>(
+              <div key={i} className="ability-item">
+                <div className="ability-item-header" onClick={()=>setOpenIdx(openIdx===i?null:i)}>
+                  <span className="ability-item-name">{a.name}</span>
+                  {a.type && <span className={`ability-type-tag atype-${a.type.toLowerCase().replace(/\s+/g,'-')}`}>{a.type}</span>}
+                  {a.phase && <span className="ability-phase-tag">{a.phase}</span>}
+                </div>
+                {openIdx===i && a.desc && (
+                  <div className="ability-desc-body" dangerouslySetInnerHTML={{__html:a.desc}}/>
                 )}
               </div>
-            </label>
-          ))}
-        </div>
-      </div>
-    );
-  }
+            ))}
+          </div>
+          <div className="lp-divider"/>
+        </>
+      )}
 
-  if (gameSystem === 'aos') {
-    const abilities = ld.unitAbilities?.[entry.unitId] || [];
-    if (!abilities.length) return null;
+      {/* Loadout notes — always shown */}
+      <div className="lp-header"><span className="lp-title">Loadout Notes</span></div>
+      <textarea className="loadout-notes"
+        placeholder="e.g. 8× bolt rifle, 1× heavy bolt rifle, sgt w/ power fist"
+        value={entry.loadoutNotes||''}
+        onChange={e=>onUpdate(listId, entry.id, {loadoutNotes:e.target.value})}/>
 
-    const [openIdx, setOpenIdx] = useState(null);
-
-    return (
-      <div className="loadout-panel">
-        <div className="lp-header"><span className="lp-title">Unit Abilities</span></div>
-        <div className="ability-list">
-          {abilities.map((a,i)=>(
-            <div key={i} className="ability-item">
-              <div className="ability-item-header" onClick={()=>setOpenIdx(openIdx===i?null:i)}>
-                <span className="ability-item-name">{a.name}</span>
-                {a.type && <span className={`ability-type-tag atype-${a.type.toLowerCase().replace(/\s+/g,'-')}`}>{a.type}</span>}
-                {a.phase && <span className="ability-phase-tag">{a.phase}</span>}
-              </div>
-              {openIdx===i && a.desc && (
-                <div className="ability-desc-body" dangerouslySetInnerHTML={{__html:a.desc}}/>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  return null;
+    </div>
+  );
 }
 
 // ── Main App ──────────────────────────────────────────────────────────────────
@@ -1045,10 +1060,7 @@ function App() {
                       const rowClass = builtErr || paintedErr ? 'err-row' : '';
 
                       const ld = window.LOADOUT_DATA;
-                      const hasPanel = ld && entry.unitId != null && (
-                        (activeList.gameSystem==='wh40k' && entry.role==='Characters' && (ld.unitEnhancements?.[entry.unitId]?.length>0)) ||
-                        (activeList.gameSystem==='aos' && (ld.unitAbilities?.[entry.unitId]?.length>0))
-                      );
+                      const hasPanel = true;
                       const enh = entry.selectedEnhancement && ld?.enhancements[entry.selectedEnhancement];
                       const enhCost = enh ? enh.cost : 0;
                       const effPts = entry.points + enhCost;
