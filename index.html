@@ -369,6 +369,18 @@ h1,h2,h3,h4 { font-family: 'Cinzel', serif; letter-spacing: 0.05em; }
 .wc-dot.melee  { background: #e07080; }
 .wc-stats { padding: 0.2rem 0.55rem 0.25rem 1.85rem; font-size: 0.75rem; color: var(--text2); background: var(--bg3); border-top: 1px solid var(--border); font-family: 'Crimson Pro', serif; letter-spacing: 0.02em; }
 .wc-keywords { color: var(--text3); font-style: italic; }
+.kw-tag { position: relative; display: inline; font-style: italic; color: var(--text3); }
+.kw-has-def { color: var(--accent2); cursor: help; border-bottom: 1px dotted var(--accent2); }
+.kw-tooltip {
+  position: fixed; transform: translateY(-100%);
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-left: 2px solid var(--accent2);
+  border-radius: 3px; padding: 0.4rem 0.6rem;
+  font-size: 0.78rem; color: var(--text); line-height: 1.5;
+  width: 240px; white-space: normal; font-style: normal;
+  z-index: 9999; pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
 .loadout-notes {
   width: 100%; min-height: 56px; resize: vertical;
   background: var(--surface); border: 1px solid var(--border);
@@ -697,6 +709,59 @@ function MsrpModal({ entry, onSave, onClose }) {
   );
 }
 
+// ── Keyword glossary & tooltip ────────────────────────────────────────────────
+const KW40K = {
+  'assault':            "Can be fired even if the bearer's unit Advanced this turn.",
+  'heavy':              "Add 1 to the Hit roll if the bearer's unit remained Stationary this turn.",
+  'rapid fire':         "Make additional attacks equal to the listed value when the target is within half range.",
+  'blast':              "Always makes a minimum of 3 attacks. Minimum 6 if the target has 6+ models; minimum 9 if 11+ models.",
+  'devastating wounds': "Critical Wounds inflict Mortal Wounds equal to the Damage value instead of normal damage.",
+  'lethal hits':        "Critical Hits automatically wound the target — no Wound roll needed.",
+  'torrent':            "Automatically hits its targets — no Hit roll needed.",
+  'ignores cover':      "The target cannot benefit from Cover saves against this weapon.",
+  'pistol':             "Can be fired in the Fight phase and when in Engagement Range of enemies.",
+  'twin-linked':        "Re-roll any or all failed Wound rolls made with this weapon.",
+  'hazardous':          "After firing, roll 1D6 per model in the unit; on a 1, that model suffers 1 Mortal Wound.",
+  'sustained hits':     "Each Critical Hit generates additional hits equal to the listed value.",
+  'melta':              "Add the listed value to the Damage characteristic when within half range.",
+  'precision':          "The attacker chooses which model in the target unit the wounds are allocated to.",
+  'indirect fire':      "Can target units not visible to the bearer, but suffers -1 to Hit.",
+  'extra attacks':      "Attacks with this weapon are in addition to the model's normal Attacks.",
+  'one shot':           "This weapon can only be used once per battle.",
+  'psychic':            "This weapon can be boosted by abilities that affect Psychic weapons.",
+  'lance':              "Add 1 to Strength if the bearer's unit charged this turn.",
+  'anti':               "Unmodified Wound rolls at or above the listed value count as Critical Wounds against the specified target type.",
+};
+function kwLookup(raw) {
+  const k = raw.toLowerCase().trim()
+    .replace(/\s+[\d]+\+?$/, '')
+    .replace(/^anti-.+$/, 'anti');
+  return KW40K[k] || null;
+}
+function stripHtmlTags(s) { return s.replace(/<[^>]+>/g, ''); }
+
+function KwTooltip({ label }) {
+  const [pos, setPos] = useState(null);
+  const def = kwLookup(label);
+  function handleEnter(e) {
+    if (!def) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    setPos({ x: Math.min(r.left, window.innerWidth - 260), y: r.top - 6 });
+  }
+  return (
+    <span className={`kw-tag${def?' kw-has-def':''}`}
+      onMouseEnter={handleEnter} onMouseLeave={()=>setPos(null)}>
+      {label}
+      {pos && def && ReactDOM.createPortal(
+        <div className="kw-tooltip" style={{left:pos.x, top:pos.y}}>
+          {def}
+        </div>,
+        document.body
+      )}
+    </span>
+  );
+}
+
 // ── Loadout Panel ─────────────────────────────────────────────────────────────
 function LoadoutPanel({ entry, gameSystem, listId, onUpdate }) {
   const [det, setDet] = useState('');
@@ -790,23 +855,30 @@ function LoadoutPanel({ entry, gameSystem, listId, onUpdate }) {
                 if (gameSystem==='wh40k') {
                   const parts = [
                     w.range ? `${w.range}"` : 'Melee',
-                    w.A     && `A${w.A}`,
-                    w.BSWS  && `${w.BSWS}+`,
-                    w.S     && `S${w.S}`,
+                    w.A    && `A${w.A}`,
+                    w.BSWS && `${w.BSWS}+`,
+                    w.S    && `S${w.S}`,
                     w.AP!==undefined && w.AP!=='' && `AP${w.AP}`,
-                    w.D     && `D${w.D}`,
+                    w.D    && `D${w.D}`,
                   ].filter(Boolean).join(' · ');
-                  stats = <div className="wc-stats">{parts}{w.desc && <span className="wc-keywords"> · {w.desc}</span>}</div>;
+                  const kws = w.desc ? w.desc.split(',').map(k=>k.trim()).filter(Boolean) : [];
+                  stats = (
+                    <div className="wc-stats">
+                      {parts}
+                      {kws.length>0 && <span> · {kws.map((kw,i)=><React.Fragment key={i}>{i>0?', ':''}<KwTooltip label={kw}/></React.Fragment>)}</span>}
+                    </div>
+                  );
                 } else {
                   const parts = [
-                    w.rng || 'Melee',
-                    w.atk,
-                    w.hit,
-                    w.wnd,
-                    w.rnd || '-',
-                    w.dmg,
+                    w.rng||'Melee', w.atk, w.hit, w.wnd, w.rnd||'-', w.dmg,
                   ].filter(Boolean).join(' · ');
-                  stats = <div className="wc-stats">{parts}{w.abilities && <span className="wc-keywords"> · {w.abilities}</span>}</div>;
+                  const kws = w.abilities ? w.abilities.split(',').map(k=>stripHtmlTags(k).trim()).filter(Boolean) : [];
+                  stats = (
+                    <div className="wc-stats">
+                      {parts}
+                      {kws.length>0 && <span className="wc-keywords"> · {kws.join(', ')}</span>}
+                    </div>
+                  );
                 }
               }
               return (
