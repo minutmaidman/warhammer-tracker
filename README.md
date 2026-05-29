@@ -155,9 +155,13 @@ The root component — owns all state and renders the full page layout.
 | `leaderMap` | `{ bodyguardEntryId → leaderEntry }` — used to render "⚔ Leader name" indicators |
 | `filteredUnits` | Active list units filtered by search and sorted by `sortBy`. In default order, leaders are grouped immediately before their attached bodyguard unit. Both the table view and Game Day view consume this value. |
 
-**Operations:** `addList`, `deleteList`, `updateListName`, `addUnit`, `updateUnit`, `removeUnit` — all update `state` and trigger `saveState()`.
+**List operations:** `addList`, `duplicateList`, `deleteList`, `updateListName`
 
-**Render structure:** sidebar → KPI bar → toolbar (with Game Day toggle) → search → table or card grid → modals.
+- `duplicateList(id)` — deep-copies the list and all its units (each gets a new `uid`), appends `(Copy)` to the name, and makes the copy the active list.
+
+**Unit operations:** `addUnit`, `updateUnit`, `removeUnit` — all update `state` and trigger `saveState()`.
+
+**Render structure:** sidebar (list selector with ⧉ duplicate and ✕ delete per list) → KPI bar → toolbar (with Game Day toggle) → search + sort → table or card grid → modals.
 
 #### Mount
 
